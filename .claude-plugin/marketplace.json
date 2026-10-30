@@ -1,0 +1,5 @@
+{
+  "name": "turn-stats-marketplace",
+  "owner": { "name": "xmdhs" },
+  "plugins": [{ "name": "turn-stats", "source": "./" }]
+}
