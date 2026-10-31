@@ -152,6 +152,102 @@ test('throughput includes time before the first response chunk', async ($, on) =
   await ui.unmount()
 })
 
+test('a turn whose row was never drawn does not block the turns after it', async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000_000 })
+  on('session.usage', () => ({
+    value: {
+      startedAt: 0,
+      context: { tokens: 100_000, window: 200_000, percent: 50 },
+      rateLimits: [],
+    },
+  }))
+  on('turn.complete', () => ({ text: '' }))
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+
+    return <Text>engine</Text>
+  })
+
+  // The turn ends and its row is never drawn in time: a /resume, a line that
+  // waited on background agents, or a pause before the screen settles.
+  await $.turn.complete({
+    answer: 'a',
+    durationMs: 1000,
+    isAborted: false,
+    turnId: 't1',
+    reason: 'answer',
+    usage: USAGE,
+  })
+  await clock.advance(60_000)
+
+  await $.turn.complete({
+    answer: 'b',
+    durationMs: 1000,
+    isAborted: false,
+    turnId: 't2',
+    reason: 'answer',
+    usage: USAGE,
+  })
+
+  // The next turn's row takes its own figures, not the abandoned ones.
+  const ui = await $.ui.mount({ ...ROW, requestId: 'row-2', surface: 'terminal' })
+  const line = await lineOf(ui)
+
+  expect(line).toContain('50% ctx left')
+  await ui.unmount()
+})
+
+test('a resumed session does not hand its rows the turn that ended', async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000_000 })
+  on('session.usage', () => ({
+    value: {
+      startedAt: 0,
+      context: { tokens: 100_000, window: 200_000, percent: 50 },
+      rateLimits: [],
+    },
+  }))
+  on('turn.complete', () => ({ text: '' }))
+  on('session.end', () => ({ sessionId: 's1' }))
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+
+    return <Text>engine</Text>
+  })
+
+  // The turn ends, then the person resumes: the conversation it belonged to is gone.
+  await $.turn.complete({
+    answer: 'a',
+    durationMs: 1000,
+    isAborted: false,
+    turnId: 't1',
+    reason: 'answer',
+    usage: USAGE,
+  })
+  await clock.advance(1000)
+  await $.session.end({ reason: 'resume', sessionId: 's1', resume: { id: 's1' } })
+
+  // Resuming redraws the transcript at once: no history row takes the old figures.
+  const history = await $.ui.mount({ ...ROW, requestId: 'hist-1', surface: 'terminal' })
+
+  expect(await lineOf(history)).toBe('')
+  await history.unmount()
+
+  await $.turn.complete({
+    answer: 'b',
+    durationMs: 1000,
+    isAborted: false,
+    turnId: 't2',
+    reason: 'answer',
+    usage: USAGE,
+  })
+
+  const ui = await $.ui.mount({ ...ROW, requestId: 'row-new', surface: 'terminal' })
+  const line = await lineOf(ui)
+
+  expect(line).toContain('50% ctx left')
+  await ui.unmount()
+})
+
 test('the line draws on every surface', async ($, on) => {
   on('session.usage', () => ({
     value: {

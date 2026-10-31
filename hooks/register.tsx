@@ -77,6 +77,15 @@ export const register: Register = on => {
     }
   })
 
+  // A session that ends (a /clear, a /resume taking its place) leaves no turn
+  // behind for the next one's row to claim.
+  on('session.end', ($, e, next) => {
+    pending.length = 0
+    gen.clear()
+
+    return next(e)
+  })
+
   on('turn.complete', async ($, e, next) => {
     if (e.agentId === undefined && e.usage !== undefined) {
       const at = await $.clock.now()
@@ -117,11 +126,16 @@ export const register: Register = on => {
     let stats = rows.get(e.requestId)
 
     if (stats === undefined) {
+      const now = await $.clock.now()
+
+      // A turn whose row was never drawn in time (a /resume, a line that waited
+      // on background agents, a long pause) is not going to be drawn now, and
+      // no later row may take it either: drop every stale entry, not just look
+      // at the head, or one of them blocks every turn after it for good.
+      while (pending.length > 0 && now - pending[0].doneAt > STALE_MS) pending.shift()
+
       const head = pending[0]
       if (head === undefined) return next(e)
-
-      // A redraw after a reload: the turn that made this row is long gone.
-      if ((await $.clock.now()) - head.doneAt > STALE_MS) return next(e)
 
       pending.shift()
       stats = head
