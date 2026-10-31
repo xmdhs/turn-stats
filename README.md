@@ -17,3 +17,7 @@ claude plugin install turn-stats --marketplace xmdhs/turn-stats
 ```
 
 In the desktop app, open **Plugins**, choose **Add marketplace**, enter `xmdhs/turn-stats`, then add the `turn-stats` plugin.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

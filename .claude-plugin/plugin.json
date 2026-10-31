@@ -1,5 +1,6 @@
 {
   "name": "turn-stats",
-  "version": "0.1.0",
-  "description": "Appends tokens, throughput, cache rate and context left to each turn's closing line."
+  "version": "0.1.1",
+  "description": "Appends tokens, throughput, cache rate and context left to each turn's closing line.",
+  "license": "MIT"
 }
